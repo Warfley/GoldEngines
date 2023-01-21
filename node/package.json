@@ -1,0 +1,36 @@
+{
+  "name": "@warfley/node-gold-engine",
+  "version": "0.0.2",
+  "description": "GOLD Parser Engine written in Typescript for Node.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "tsc",
+    "prepack": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Warfley/goldengine.git"
+  },
+  "keywords": [
+    "typescript",
+    "gold",
+    "gold engine",
+    "parser",
+    "lexer",
+    "lalr parser"
+  ],
+  "homepage": "https://github.com/Warfley/goldengine/node",
+  "author": "Frederic Kehrein",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/Warfley/goldengine/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.18",
+    "typescript": "^4.9.4"
+  }
+}
