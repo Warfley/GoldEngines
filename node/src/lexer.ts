@@ -136,6 +136,9 @@ export interface MatchGroup {
 export interface GroupError {
   groups: GroupStack;
 }
+export function is_group_error(result: object): result is GroupError {
+  return "groups" in result;
+}
 
 interface GroupStackItem {
   group: MatchGroup,

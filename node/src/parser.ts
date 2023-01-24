@@ -12,7 +12,7 @@ export enum LRActionType {
 export enum SymbolType {
   NON_TERMINAL = 0,
   TERMINAL = 1,
-  SKIP_SYMBOLS = 2, // Whitespaces, newlines, etc.
+  SKIPPABLE = 2, // Whitespaces, newlines, etc.
   EOF = 3,
   GROUP_START = 4,
   GROUP_END = 5,
@@ -46,9 +46,16 @@ export interface LRState {
 export interface LRParseTreeNode {
   symbol: ParserSymbol;
   children: Token|Array<LRParseTreeNode>;
+  start?: number,
+  end?: number
 }
 
-interface LRStackItem {
+export function parse_successful(result: object): result is LRParseTreeNode {
+  return "symbol" in result &&
+         "children" in result;
+}
+
+export interface LRStackItem {
   parse_tree: LRParseTreeNode;
   current_state: LRState;
 }
@@ -72,7 +79,9 @@ function lalr_step(look_ahead: Token, stack: LRStack): LRStepResult {
       current_state: transition.target as LRState,
       parse_tree: {
         symbol: look_ahead.symbol,
-        children: look_ahead
+        children: look_ahead,
+        start: look_ahead.position,
+        end: look_ahead.position + look_ahead.value.length
       }
     });
     return LRStepResult.SHIFT;
@@ -95,7 +104,9 @@ function lalr_step(look_ahead: Token, stack: LRStack): LRStepResult {
   stack.push({
     parse_tree: {
       symbol: new_symbol,
-      children: consumes
+      children: consumes,
+      start: consumes[0]?.start,
+      end: consumes[consumes.length-1]?.end
     },
     current_state: next_state.target as LRState
   });
@@ -109,31 +120,42 @@ function lalr_setup(initial_state: LRState): LRStack {
     parse_tree: {
       symbol: {
         name: "INITIAL_STATE",
-        type: SymbolType.ERROR
+        type: SymbolType.ERROR,
       },
       children: []
     }
   }];
 }
 
-interface LexerError {
+export interface LexerError {
   position: number;
 }
 
-interface ParserError {
+export function is_lexer_error(result: object): result is LexerError {
+  return "position" in result;
+}
+
+export interface ParserError {
   last_token: "(EOF)"|Token;
   stack: LRStack;
 }
 
+export function is_parser_error(result: object): result is ParserError {
+  return "last_token" in result &&
+         "stack" in result;
+}
+
 type DFAEvent = (token: Token, ...args: any[]) => Promise<void>;
 type LREvent = (orig_state: LRState, look_ahead: Token, stack: ReadonlyArray<LRStackItem>, ...args: any[]) => Promise<void>;
+
+export type ParsingResult = LRParseTreeNode|LexerError|GroupError|ParserError;
 
 export async function parse_string(str: string, dfa: DFAState, lalr: LRState,
                              on_token?: DFAEvent,
                              on_reduce?: LREvent,
                              on_shift?: LREvent,
                              ...args: any[]
-                            ): Promise<LRParseTreeNode|LexerError|GroupError|ParserError> {
+                            ): Promise<ParsingResult> {
   let look_ahead: Token|undefined = undefined;
   let current_pos = 0;
   let stack = lalr_setup(lalr);
@@ -149,13 +171,14 @@ export async function parse_string(str: string, dfa: DFAState, lalr: LRState,
         return tok;
       }
       current_pos += tok.value.length;
-      if (tok.symbol.type === SymbolType.SKIP_SYMBOLS) {
-        continue;
-      }
-      look_ahead = tok;
+      // event handling
       if (on_token !== undefined) {
         await on_token(tok, ...args);
       }
+      if (tok.symbol.type === SymbolType.SKIPPABLE) {
+        continue;
+      }
+      look_ahead = tok;
       continue;
     } // else
 

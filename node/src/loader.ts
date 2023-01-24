@@ -158,7 +158,7 @@ enum GrammarRecordType{
     COUNTS_V5 = "t".charCodeAt(0),
 }
 
-interface GrammarParseResult {
+export interface GrammarParseResult {
   params: Map<string, string>;
   rules: Array<ParserRule>;
   dfa: DFAState;
@@ -324,7 +324,7 @@ function parse_symbol(file: GTFileReader, next_index: number): ParserSymbol {
   case SymbolType.EOF:
     name = "(EOF)";
     break;
-  case SymbolType.SKIP_SYMBOLS:
+  case SymbolType.SKIPPABLE:
     name = "[" + name + "]";
     break;
   case SymbolType.GROUP_START:
@@ -520,7 +520,7 @@ function build_groups(parsed_groups: ReadonlyArray<ParsedMatchGroup>, symbols: A
     if (comment_symbol === undefined) {
       comment_symbol = {
         name: "Comment",
-        type: SymbolType.SKIP_SYMBOLS
+        type: SymbolType.SKIPPABLE
       };
     }
 
