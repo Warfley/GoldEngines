@@ -8,11 +8,14 @@ interface CharRange {
 }
 
 export class CharRangeSet {
-  private ranges: Array<CharRange> = [];
-  private codepage: number = 0; // How is this encoded?
+  public ranges: Array<CharRange> = [];
+  public codepage: number = 0; // How is this encoded?
 
-  constructor(codepage: number) {
+  constructor(codepage: number, ranges?: Array<CharRange>) {
     this.codepage = codepage;
+    if (ranges !== undefined) {
+      this.ranges = ranges;
+    }
   }
 
   public add_range(start: number, end: number) {
@@ -73,7 +76,6 @@ const EOF_SYMBOL: ParserSymbol = {
   name: "(EOF)",
   type: SymbolType.EOF
 };
-
 
 function edge_with_label(state: DFAState, char: string): DFAEdge|undefined {
   for (const edge of state.edges) {

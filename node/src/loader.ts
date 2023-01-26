@@ -165,7 +165,12 @@ export interface GrammarParseResult {
   lalr: LRState;
 }
 
-interface ParsedDFAState {
+export interface CGTSymbol {
+  name: string;
+  type: SymbolType
+}
+
+export interface CGTDFAState {
   result?: number;
   edges: {
     label: number;
@@ -173,7 +178,7 @@ interface ParsedDFAState {
   }[];
 }
 
-interface ParsedLRState {
+export interface CGTLRState {
   transitions: {
     value: number;
     action_type: LRActionType;
@@ -181,13 +186,13 @@ interface ParsedLRState {
   }[];
 }
 
-interface ParsedReduction {
+export interface CGTRule {
   index: number;
   produces: number;
   consumes: Array<number>;
 }
 
-interface ParsedMatchGroup {
+export interface CGTGroup {
   name: string;
   symbol: number;
   start_symbol: number;
@@ -215,7 +220,7 @@ function parse_charset(file: GTFileReader, next_index: number): CharSet {
 }
 
 
-function parse_dfa_state(file: GTFileReader, next_index: number): ParsedDFAState {
+function parse_dfa_state(file: GTFileReader, next_index: number): CGTDFAState {
   let index = file.read_int();
   if (index !== next_index) {
     throw new Error("Index out of order");
@@ -225,7 +230,7 @@ function parse_dfa_state(file: GTFileReader, next_index: number): ParsedDFAState
   let result_index = file.read_int();
   file.skip_field();
 
-  let result: ParsedDFAState = {
+  let result: CGTDFAState = {
     result: is_final
           ? result_index
           : undefined,
@@ -246,14 +251,14 @@ function parse_dfa_state(file: GTFileReader, next_index: number): ParsedDFAState
 }
 
 
-function parse_lr_state(file: GTFileReader, next_index: number): ParsedLRState {
+function parse_lr_state(file: GTFileReader, next_index: number): CGTLRState {
   let index = file.read_int();
   if (index !== next_index) {
     throw new Error("Index out of order");
   }
   file.skip_field();
 
-  let result: ParsedLRState = {
+  let result: CGTLRState = {
     transitions: []
   };
   while (!file.eof() && !file.record_finished()) {
@@ -281,7 +286,7 @@ function parse_parameter(file: GTFileReader, params: Map<string, string>) {
 }
 
 
-function parse_reduction(file: GTFileReader, next_index: number): ParsedReduction {
+function parse_reduction(file: GTFileReader, next_index: number): CGTRule {
   let index = file.read_int();
   if (index !== next_index) {
     throw new Error("Index out of order");
@@ -289,7 +294,7 @@ function parse_reduction(file: GTFileReader, next_index: number): ParsedReductio
   let symbol = file.read_int();
   file.skip_field(); // reserved;
 
-  let result: ParsedReduction = {
+  let result: CGTRule = {
     index: index,
     produces: symbol,
     consumes: []
@@ -304,7 +309,7 @@ function parse_reduction(file: GTFileReader, next_index: number): ParsedReductio
 }
 
 
-function parse_symbol(file: GTFileReader, next_index: number): ParserSymbol {
+function parse_symbol(file: GTFileReader, next_index: number): CGTSymbol {
   let index = file.read_int();
   if (index !== next_index) {
     throw new Error("Index out of order");
@@ -314,26 +319,6 @@ function parse_symbol(file: GTFileReader, next_index: number): ParserSymbol {
 
   // To allow matching only on the basis of the name
   // This removes any ambiguity from similar named symbols
-  switch (type) {
-  case SymbolType.TERMINAL:
-    name = "'" + name + "'";
-    break;
-  case SymbolType.NON_TERMINAL:
-    name = "<" + name + ">";
-    break;
-  case SymbolType.EOF:
-    name = "(EOF)";
-    break;
-  case SymbolType.SKIPPABLE:
-    name = "[" + name + "]";
-    break;
-  case SymbolType.GROUP_START:
-    name = "/" + name + "/";
-    break;
-  case SymbolType.GROUP_END:
-    name = "\\" + name + "\\";
-  }
-
   return {
     name: name,
     type: type
@@ -361,7 +346,7 @@ function parse_char_ranges(file: GTFileReader, next_index: number): CharSet {
   return result;
 }
 
-function parse_group(file: GTFileReader, next_index: number): ParsedMatchGroup {
+function parse_group(file: GTFileReader, next_index: number): CGTGroup {
   let index = file.read_int();
   if (index !== next_index) {
     throw new Error("Index out of order");
@@ -374,7 +359,7 @@ function parse_group(file: GTFileReader, next_index: number): ParsedMatchGroup {
   let advance = file.read_int();
   let end_mode = file.read_int();
 
-  let result: ParsedMatchGroup = {
+  let result: CGTGroup = {
     name: name,
     symbol: group_symbol,
     start_symbol: start_symbol,
@@ -401,8 +386,134 @@ function parse_property(file: GTFileReader, params: Map<string, string>) {
   params.set(name, value);
 }
 
+export interface CGTData {
+  version: "v1"|"v5";
+  charsets: Array<CharSet>;
+  params: Map<string, string>
+  dfa_states: Array<CGTDFAState>;
+  dfa_init_state: number;
+  lr_states: Array<CGTLRState>;
+  lr_init_state: number;
+  rules: Array<CGTRule>;
+  groups: Array<CGTGroup>;
+  symbols: Array<CGTSymbol>;
+}
+
+export function load_cgt(file: GTFileReader): CGTData {
+  let version_str = file.read_raw_string();
+  let version_match = version_str.match(/GOLD Parser Tables\/(v1|v5).0/);
+  if (version_match === null ||
+     (version_match[1] !== "v1" &&
+      version_match[1] !== "v5")) {
+    throw new Error("Magic string not found in file");
+  }
+  let result: CGTData = {
+    version: version_match[1],
+    charsets: [],
+    params: new Map<string, string>(),
+    dfa_states: [],
+    dfa_init_state: 0,
+    lr_states: [],
+    lr_init_state: 0,
+    rules: [],
+    groups: [],
+    symbols: [],
+  }
+
+  while (!file.eof()) {
+    file.start_record();
+    let record_type: GrammarRecordType = file.read_byte();
+
+    switch (record_type) {
+    case GrammarRecordType.CHARSET:
+      result.charsets.push(parse_charset(file, result.charsets.length));
+      break;
+
+    case GrammarRecordType.DFASTATE:
+      result.dfa_states.push(parse_dfa_state(file, result.dfa_states.length));
+      break;
+
+    case GrammarRecordType.INITIALSTATES:
+      result.dfa_init_state = file.read_int();
+      result.lr_init_state = file.read_int();
+      break;
+
+    case GrammarRecordType.LRSTATE:
+      result.lr_states.push(parse_lr_state(file, result.lr_states.length));
+      break;
+
+    case GrammarRecordType.PARAMETER:
+      parse_parameter(file, result.params);
+      break;
+
+    case GrammarRecordType.RULE:
+      result.rules.push(parse_reduction(file, result.rules.length));
+      break;
+
+    case GrammarRecordType.SYMBOL:
+      result.symbols.push(parse_symbol(file, result.symbols.length));
+      break;
+
+    case GrammarRecordType.COUNTS:
+    case GrammarRecordType.COUNTS_V5:
+      // No preallocation required just skip
+      skip_record(file);
+      break;
+
+    case GrammarRecordType.CHARRANGES:
+      result.charsets.push(parse_char_ranges(file, result.charsets.length));
+      break;
+
+    case GrammarRecordType.GROUP:
+      result.groups.push(parse_group(file, result.groups.length));
+      break;
+
+    case GrammarRecordType.PROPERTY:
+      parse_property(file, result.params);
+      break;
+    }
+
+    if (!file.record_finished()) {
+      throw new Error("Incomplete record reading");
+    }
+  }
+  return result;
+}
+
+function build_symbols(symbols: Array<CGTSymbol>): Array<ParserSymbol> {
+  return symbols.map((symbol) => {
+    // Name mangling to ensure different symbols cannot have
+    // the same name
+    let mangled_name = symbol.name;
+    switch (symbol.type) {
+    case SymbolType.TERMINAL:
+      mangled_name = "'" + mangled_name + "'";
+      break;
+    case SymbolType.NON_TERMINAL:
+      mangled_name = "<" + mangled_name + ">";
+      break;
+    case SymbolType.EOF:
+      mangled_name = "(EOF)";
+      break;
+    case SymbolType.SKIPPABLE:
+      mangled_name = "[" + mangled_name + "]";
+      break;
+    case SymbolType.GROUP_START:
+      mangled_name = "/" + mangled_name + "/";
+      break;
+    case SymbolType.GROUP_END:
+      mangled_name = "\\" + mangled_name + "\\";
+    }
+
+    return {
+      name: mangled_name,
+      type: symbol.type
+    }
+  })
+}
+
 function build_dfa(initial: number,
-                   states: Array<ParsedDFAState>,
+                   states: Array<CGTDFAState>,
                    charsets: Array<CharSet>,
                    symbols: Array<ParserSymbol>): DFAState {
   let dfa_map = new Map<number, DFAState>();
@@ -435,7 +546,7 @@ function build_dfa(initial: number,
 }
 
 function build_lr(initial: number,
-                  states: Array<ParsedLRState>,
+                  states: Array<CGTLRState>,
                   rules: Array<ParserRule>,
                   symbols: Array<ParserSymbol>) {
   let lr_map = new Map<number, LRState>();
@@ -493,7 +604,7 @@ function build_lr(initial: number,
   return recursive_helper(initial);
 }
 
-function build_groups(parsed_groups: ReadonlyArray<ParsedMatchGroup>, symbols: Array<ParserSymbol>, is_v1: boolean) {
+function build_groups(parsed_groups: ReadonlyArray<CGTGroup>, symbols: Array<ParserSymbol>, is_v1: boolean): void {
   for (const parsed of parsed_groups) {
     let group: MatchGroup = {
       name: parsed.name,
@@ -559,84 +670,11 @@ function build_groups(parsed_groups: ReadonlyArray<ParsedMatchGroup>, symbols: A
   }
 }
 
-export function load_grammar_tables(file: GTFileReader): GrammarParseResult {
-  let version_str = file.read_raw_string();
-  let version_match = version_str.match(/GOLD Parser Tables\/v(\d).0/);
-  if (version_match === null) {
-    throw new Error("Magic string not found in file");
-  }
-  let version = version_match[1];
-  let charsets: Array<CharSet> = [];
-  let params = new Map<string, string>();
-  let dfa_states: Array<ParsedDFAState> = [];
-  let dfa_init_state: number = 0;
-  let lr_states: Array<ParsedLRState> = [];
-  let lr_init_state: number = 0;
-  let reductions: Array<ParsedReduction> = [];
-  let parsed_groups: Array<ParsedMatchGroup> = [];
-  let symbols: Array<ParserSymbol> = [];
+export function load_grammar_tables(cgt_data: CGTData): GrammarParseResult {
+  let symbols = build_symbols(cgt_data.symbols);
+  build_groups(cgt_data.groups, symbols, cgt_data.version === "v1");
 
-  while (!file.eof()) {
-    file.start_record();
-    let record_type: GrammarRecordType = file.read_byte();
-
-    switch (record_type) {
-    case GrammarRecordType.CHARSET:
-      charsets.push(parse_charset(file, charsets.length));
-      break;
-
-    case GrammarRecordType.DFASTATE:
-      dfa_states.push(parse_dfa_state(file, dfa_states.length));
-      break;
-
-    case GrammarRecordType.INITIALSTATES:
-      dfa_init_state = file.read_int();
-      lr_init_state = file.read_int();
-      break;
-
-    case GrammarRecordType.LRSTATE:
-      lr_states.push(parse_lr_state(file, lr_states.length));
-      break;
-
-    case GrammarRecordType.PARAMETER:
-      parse_parameter(file, params);
-      break;
-
-    case GrammarRecordType.RULE:
-      reductions.push(parse_reduction(file, reductions.length));
-      break;
-
-    case GrammarRecordType.SYMBOL:
-      symbols.push(parse_symbol(file, symbols.length));
-      break;
-
-    case GrammarRecordType.COUNTS:
-    case GrammarRecordType.COUNTS_V5:
-      // No preallocation required just skip
-      skip_record(file);
-      break;
-
-    case GrammarRecordType.CHARRANGES:
-      charsets.push(parse_char_ranges(file, charsets.length));
-      break;
-
-    case GrammarRecordType.GROUP:
-      parsed_groups.push(parse_group(file, parsed_groups.length));
-      break;
-
-    case GrammarRecordType.PROPERTY:
-      parse_property(file, params);
-      break;
-    }
-
-    if (!file.record_finished()) {
-      throw new Error("Incomplete record reading");
-    }
-  }
-
-  build_groups(parsed_groups, symbols, version === "1");
-
-  let rules = reductions.map((r) => {
+  let rules = cgt_data.rules.map((r) => {
     return {
       produces: symbols[r.produces],
       consumes: r.consumes.map((c) => symbols[c]),
@@ -645,11 +683,11 @@ export function load_grammar_tables(file: GTFileReader): GrammarParseResult {
   });
 
   return {
-    dfa: build_dfa(dfa_init_state, dfa_states,
-                   charsets, symbols),
-    lalr: build_lr(lr_init_state, lr_states,
+    dfa: build_dfa(cgt_data.dfa_init_state, cgt_data.dfa_states,
+                   cgt_data.charsets, symbols),
+    lalr: build_lr(cgt_data.lr_init_state, cgt_data.lr_states,
                    rules, symbols),
-    params: params,
+    params: cgt_data.params,
     rules: rules
   };
 }
