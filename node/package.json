@@ -1,6 +1,6 @@
 {
   "name": "@warfley/node-gold-engine",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "GOLD Parser Engine written in Typescript for Node.js",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

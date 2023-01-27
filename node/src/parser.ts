@@ -46,8 +46,8 @@ export interface LRState {
 export interface LRParseTreeNode {
   symbol: ParserSymbol;
   children: Token|Array<LRParseTreeNode>;
-  start?: number,
-  end?: number
+  start: number,
+  end: number
 }
 
 export function parse_successful(result: object): result is LRParseTreeNode {
@@ -105,8 +105,8 @@ function lalr_step(look_ahead: Token, stack: LRStack): LRStepResult {
     parse_tree: {
       symbol: new_symbol,
       children: consumes,
-      start: consumes[0]?.start,
-      end: consumes[consumes.length-1]?.end
+      start: consumes[0]?.start || stack[stack.length-1].parse_tree.end,
+      end: consumes[consumes.length-1]?.end || stack[stack.length-1].parse_tree.end
     },
     current_state: next_state.target as LRState
   });
@@ -122,7 +122,9 @@ function lalr_setup(initial_state: LRState): LRStack {
         name: "INITIAL_STATE",
         type: SymbolType.ERROR,
       },
-      children: []
+      children: [],
+      start: 0,
+      end: 0
     }
   }];
 }
