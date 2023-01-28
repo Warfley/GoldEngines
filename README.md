@@ -6,7 +6,8 @@ For further information on the GOLD parsing system visit: http://goldparser.org/
 For a documentation on how a GOLD engine functions and how to develop your own check out the [Documentation](./docs/index.md).
 
 ## Implemented Engines
-* [Node.js](./node/): A Node.JS engine written in typescript. This engine was developed to be used with the GOLD parsing tools VSCode Extension.
+* [Node.js](https://github.com/Warfley/NodeGoldEngine): A Node.JS engine written in typescript. This engine was developed to be used with the GOLD parsing tools VSCode Extension.
+* [FPC](https://github.com/Warfley/FPCGoldEngine): A engine written in FreePascal
 
 ## Licensing
 The licenses are per implementation and can be found in the respective sub folder for each engine.

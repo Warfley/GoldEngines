@@ -1,0 +1,6 @@
+[submodule "fpc"]
+	path = fpc
+	url = https://github.com/Warfley/FPCGoldEngine
+[submodule "node"]
+	path = node
+	url = https://github.com/Warfley/NodeGoldEngine
