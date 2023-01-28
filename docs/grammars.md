@@ -174,6 +174,7 @@ Version 1.0 only allowed a strict set of parameters, which where alwasy encoded 
 | Name           | String   |
 | Version        | String   |
 | Author         | String   |
+| About          | String   |
 | Case Sensitive | Boolean  |
 | Start Symbol   | Int      |
 
@@ -402,7 +403,7 @@ function read_dfa_state(stream, next_index, num_fields):
   if index != next_index:
     return IndexOutOfOrder
 
-  is_final = read_int_field(stream)
+  is_final = read_bool_field(stream)
   final_result = read_int_field(stream)
   skip_field(stream) // RFU
 
